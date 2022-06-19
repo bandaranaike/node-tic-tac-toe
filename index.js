@@ -5,46 +5,30 @@ const cors = require("cors")
 
 const fs = require("fs")
 
-let student = {
-    name: 'Mike',
-    age: 23,
-    gender: 'Male',
-    department: 'English',
-    car: 'Honda'
-};
-
-
-
 app.use(express.json());
 
 // Handling CORS
 app.use(cors())
 
+const initialSquares = [{ squares: Array(9).fill(null) }];
 
+app.put("/api/update-data", async function (req, res) {
 
+    let i = req.body.square;
+    let xIsNext = req.body.xIsNext;
+    let data = await updateHistory(i, xIsNext);
 
+    res.json({ success: true, data })
+})
 
-// app.get("/api", (req, res) => {
-//     return res.json({ message: "Hello from the tic-tac-toe server" })
-// })
-
-app.get("/api/initial-data", async (req, res) => {
+app.post("/api/reset-game", (req, res) => {
+    writeDBFile(initialSquares);
     const data = {
-        history: [{ squares: Array(9).fill(null) }],
+        history: initialSquares,
         xIsNext: true,
         winner: null
     }
     res.json(data)
-})
-
-
-app.put("/api/update-data", function (req, res) {
-
-    let i = req.body.square;
-    let xIsNext = req.body.xIsNext;
-    updateHistory(req, i, xIsNext);
-
-    res.json({ success: true, data: req.body })
 })
 
 async function timeOutOne() {
@@ -60,20 +44,13 @@ app.listen(PORT, () => {
     console.log("Welcome to the tic-tac-toe node js app")
 });
 
-
-function getHistory(req) {
-    req.session.history = [{ squares: Array(9).fill(null) }]
-}
-
-
-async function updateHistory(req, i, xIsNext) {
+async function updateHistory(i, xIsNext) {
     let history;
 
     await readDBFile().then(r => {
         history = r;
     });
 
-    history = history || [{ squares: Array(9).fill(null) }];
 
     const current = history[history.length - 1];
     const squares = current.squares.slice();
@@ -82,8 +59,17 @@ async function updateHistory(req, i, xIsNext) {
 
     history = history.concat([{ squares: squares, }])
 
-    let data = JSON.stringify(history);
-    fs.writeFileSync('steps.json', data);
+    let winner = await calculateWinner(squares);
+
+    const data = {
+        history: history,
+        xIsNext: !xIsNext,
+        winner
+    }
+
+    writeDBFile(history);
+
+    return data;
 
 }
 
@@ -95,17 +81,20 @@ async function readDBFile() {
             try {
                 history = JSON.parse(data)
             } catch (e) {
-                history = [{ squares: Array(9).fill(null) }];
+                history = initialSquares;
             }
             rs(history)
         });
     })
 }
 
+async function writeDBFile(history) {
+    let data = JSON.stringify(history);
+    fs.writeFileSync('steps.json', data);
+}
 
 
-
-function calculateWinner(squares) {
+async function calculateWinner(squares) {
     const lines = [
         [0, 1, 2],
         [3, 4, 5],
