@@ -5,13 +5,19 @@ const cors = require("cors")
 
 const fs = require("fs")
 
+const { readDBFile, writeDBFile } = require("./database")
+
 app.use(express.json());
 
 // Handling CORS
 app.use(cors())
 
+// Initial game value
 const initialSquares = [{ squares: Array(9).fill(null) }];
 
+/**
+ * Get the data update request
+ */
 app.put("/api/update-data", async function (req, res) {
 
     let i = req.body.square;
@@ -21,6 +27,9 @@ app.put("/api/update-data", async function (req, res) {
     res.json({ success: true, data })
 })
 
+/**
+ * Get the game reset request
+ */
 app.post("/api/reset-game", (req, res) => {
     writeDBFile(initialSquares);
     const data = {
@@ -31,35 +40,40 @@ app.post("/api/reset-game", (req, res) => {
     res.json(data)
 })
 
-async function timeOutOne() {
-    const data = {
-        history: Array(9).fill(null),
-        xIsNext: true,
-        winner: null
-    }
-    return new Promise(r => setTimeout(() => r(data), 100))
-}
-
+/**
+ * Initialize the port
+ */
 app.listen(PORT, () => {
     console.log("Welcome to the tic-tac-toe node js app")
 });
 
+/**
+ * Get the history from json file and update with new value and store it again
+ * 
+ * @param string i 
+ * @param boolean xIsNext 
+ * @returns object
+ */
 async function updateHistory(i, xIsNext) {
-    let history;
 
+    let history;
     await readDBFile().then(r => {
         history = r;
     });
 
-
+    // The latest one is current one
     const current = history[history.length - 1];
+
+    // Creating new one by copying the previous one
     const squares = current.squares.slice();
 
+    // Replacing new value in the new array
     squares[i] = xIsNext ? 'X' : 'O';
 
+    // Concatinating the history and new record
     history = history.concat([{ squares: squares, }])
 
-    let winner = await calculateWinner(squares);
+    let winner = await calculateWinner(squares, history);
 
     const data = {
         history: history,
@@ -73,28 +87,15 @@ async function updateHistory(i, xIsNext) {
 
 }
 
-async function readDBFile() {
-    return new Promise((rs, rj) => {
-        fs.readFile('steps.json', (err, data) => {
-            if (err) throw err;
-            let history;
-            try {
-                history = JSON.parse(data)
-            } catch (e) {
-                history = initialSquares;
-            }
-            rs(history)
-        });
-    })
-}
+/**
+ * If the current user has entered same symbol in a row, winner is current user.
+ * 
+ * @param Array squares 
+ * @param Array history 
+ * @returns 
+ */
+async function calculateWinner(squares, history) {
 
-async function writeDBFile(history) {
-    let data = JSON.stringify(history);
-    fs.writeFileSync('steps.json', data);
-}
-
-
-async function calculateWinner(squares) {
     const lines = [
         [0, 1, 2],
         [3, 4, 5],
@@ -106,10 +107,20 @@ async function calculateWinner(squares) {
         [2, 4, 6],
     ];
     for (let i = 0; i < lines.length; i++) {
+
+        // A single row
         const [a, b, c] = lines[i];
+
+        // Checking whether same charactors in a single row or not
         if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
             return squares[a]
         }
     }
+
+    // User has entered all 9 charactors already.
+    if (history.length === 10) {
+        return "over";
+    }
+
     return null;
 }
